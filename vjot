@@ -1,22 +1,74 @@
-source ~/.config/rhino/sourceme
-pushd $0/.. > ~/.local/tmp/deleteme
+source ~/.config/rhino/source
 
-export RHINO_LOG=$RHINO_VOICE_ACC
-export RHINO_STAGE=$RHINO_VOICE_STAGE
-export RHINO_WS852=/Volumes/WS-852/RECORDER
+export __LOG=$RHINO_VJOT_LOG
+export __STAGE=$RHINO_VJOT_STAGE
+export __WS852=/Volumes/WS-852/RECORDER
+export __XSCRIBED=$__STAGE/xscribed
+export __UPLOADED=$__STAGE/uploaded
+export __INCOMING=$__STAGE/incoming
 
-if [ -f "./bin/$1" ] 
-then
-       ./bin/$* 
-else
+mkdir -p $__STAGE
+mkdir -p $__XSCRIBED
+mkdir -p $__UPLOADED
+mkdir -p $__INCOMING
+
+function main () {
+	_$*
+}
+
+function _() {
 	echo usage: 
-	echo "    $0 SUBCOMMAND"
-	echo
-	echo SUBCOMMANDS:
-	for ii in `ls -1 ./bin`
-	do
-    	echo "    $ii"
-	done
-fi
+	echo "    " vjot cat
+	echo "    " vjot upload
+	echo "    " vjot download
+	echo "    " vjot xscribe
+}
 
-popd > ~/.local/tmp/deleteme
+function _cat () {
+    cat $__LOG
+}
+
+function _download () {
+    for FNAME in `ls $__WS852/*/* | grep  ".*FOLDER_[A-E]\/[0-9]\{6\}_[0-9]\{4\}.[Mm][Pp]3"` 
+    do
+        echo copying $FNAME to $__INCOMING
+        cp -p $FNAME $__INCOMING
+    done 
+    python ./scripts/fix.py $__INCOMING
+}
+
+
+function _upload () {
+    cd $__XSCRIBED || exit
+    for FILE in `ls -1 *.mp3` ; do
+	    [ -f $__UPLOADED/$FILE ] && echo skipping $FILE && rm $FILE
+    done
+    for FILE in `ls -1 *.mp3` ; do
+        aws s3 cp $FILE s3://bch.archive.voice/$FILE && mv $FILE $__UPLOADED && continue
+	echo could not upload $FILE
+    done
+}
+
+function _xscribe () {
+    pushd $__INCOMING || exit
+
+    # Move already transcribed voicefiles to ./xscribed
+    for FILE in `ls -1 *.mp3` ; do
+       grep -e $FILE $__LOG && mv $FILE $__XSCRIBED
+    done
+
+    # Xscribe those left
+    for FNAME in `ls -1 *.mp3` ; do
+        while true; do    
+            echo -n $FNAME : 
+            afplay -t 30 $FNAME 
+            say -r 777 beep
+            read DESCRIPTION
+            [ "$DESCRIPTION" == "" ] && continue
+            echo $FNAME $DESCRIPTION >> $__LOG
+            break
+        done
+    done
+    popd
+}
+main $*
