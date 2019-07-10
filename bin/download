@@ -1,8 +1,0 @@
-[ -d "$RHINO_STAGE" ] || mkdir $RHINO_STAGE
-
-for fname in `ls $RHINO_WS852/*/* | grep  ".*FOLDER_[A-E]\/[0-9]\{6\}_[0-9]\{4\}.[Mm][Pp]3"` 
-do
-    echo copying $fname to $RHINO_STAGE
-    cp -p $fname $RHINO_STAGE
-done 
-python ./scripts/fix.py $RHINO_STAGE
